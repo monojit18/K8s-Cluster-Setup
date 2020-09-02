@@ -1,39 +1,64 @@
 # Setup of a vanilla Kubernetes (k8s) cluster - on bare metal
 
-
-
 ## Pre-Requisites
 
 1. Download Virtual Box - *https://www.virtualbox.org/wiki/Downloads*
 2. Install Vagrant - *brew cask install vagrant*. This would help provisioning the VM infrastructure
 3. Git CLI client - *https://git-scm.com/downloads* - for easy reference to sample repos
 
-
-
-## Execution Steps
+## Cluster Setup
 
 1. Setup Vagrant - *Check Status, Install plugins etc. (if needed)*
-
 2. Provision VMs for k8s cluster - *1 Master Node, 2 Worker Nodes*
-
 3. Install *Kubeadm* on each *Node*
-
 4. Install *Docker CE* on each *Node* 
-
 5. Install kubelet and kubectl on each *Node* 
-
 6. Initialize and Setup K8s Cluster on *Master Node*
+7. Deploy *Weavenet* Pod Network to the Cluster
+8. Join *Worker Nodes* into that cluster
 
-7. Join *Worker Nodes* into that cluster
+## Application Deployment - Simple
 
-   
+1. Deploy sample *Nginx* service from Docker Hub and deploy with 1 replica
 
-### Setup Vagrant
+2. Check *Deployment* status; create a k8s *Service* for connecting for outside te *Pod*.
+
+   (*Identify the issue in connecting to the Nginx application from out side the cluster*)
+
+3. Install *Nginx* *Ingress* *Controller* along with *MetalLB*, providing Load Balancer solution for bare metsal scenario
+
+4. Create k8s Ingress object and route to Nginx service from outside
+
+5. Scale (out/in) Applications - *Manually*
+
+## Application Deployment - Advanced
+
+- Create *Namespace* for *DEV* and *QA* environments
+- Deploy *MongoDB* service from Docker Hub
+- Configure K8s *Secrets* to manage DB credentials
+- Deploy *RatingsWeb* front end application from *Azure Container Registry (ACR)*
+- Deploy *RatingsAPI* back end application from *Azure Container Registry (ACR)*
+- Configure Front end app to communicate with Back end app
+- *Rolling Updates* and *Rollbacks*
+- Use Nginx Ingress Controller to route to appropriate services
+- Network Policy to restrict traffic from/to desrired applications only
+- *CPU* based *Horizontal Pod AutoScaler* for Front/Back end applications
+- Resource Quota to manage resourcer allocation avcross namespaces
+- Taintts and Tolerations
+- Node Affinity/Anti-Affinity
+
+
+
+## Hands-On Lab
+
+### Cluster Setup
+
+#### Setup Vagrant
 
 - vagrant status
 - vagrant plugin install vagrant-scp
 
-### Provision VMs for k8s cluster 
+#### Provision VMs for k8s cluster 
 
 - vagrant up
 
@@ -150,11 +175,21 @@
     kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=192.168.56.2
     ```
 
+  - Deploy *Weavenet* Pod Network to the Cluster. Please note that you can deploy another supported Pod Network as well e.g. *Calico* (*https://docs.projectcalico.org/getting-started/kubernetes/self-managed-onprem/onpremises*)
+
+    ```bash
+    kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+    ```
+
   - Join *Worker Nodes* into that cluster
 
     ```bash
     Follow On-Screen Instructions
     ```
+
+  
+
+  #### Application Deployment - Simple
 
   - Deploy sample microservice
 
@@ -165,7 +200,7 @@
   - Expose the microservice
 
     ```bash
-    kubectl expose deploy nginx-deploy --name=nginx-svc --port=80
+    kubectl expose deploy nginx-deploy --name=nginx-svc --port=80 --type=NodePort
     ```
 
     
