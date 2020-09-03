@@ -25,29 +25,29 @@
 
    (*Identify the issue in connecting to the Nginx application from out side the cluster*)
 
-3. Install *Nginx* *Ingress* *Controller* along with *MetalLB*, providing Load Balancer solution for bare metsal scenario
-
-4. Create k8s Ingress object and route to Nginx service from outside
-
-5. Scale (out/in) Applications - *Manually*
+3. Scale (out/in) Applications - *Manually*
 
 ## Application Deployment - Advanced
 
-- Create *Namespace* for *DEV* and *QA* environments
-- Deploy *MongoDB* service from Docker Hub
-- Configure K8s *Secrets* to manage DB credentials
-- Deploy *RatingsWeb* front end application from *Azure Container Registry (ACR)*
-- Deploy *RatingsAPI* back end application from *Azure Container Registry (ACR)*
-- Configure Front end app to communicate with Back end app
-- *Rolling Updates* and *Rollbacks*
+- Create *Namespaces* for *DEV* and *QA* environments
+
+- Deploy Microservivces using YAML file rather than command line
+
+- Install Helm package manager
+
+- Install *Nginx* *Ingress* *Controller* along with *MetalLB*, providing Load Balancer solution for bare metsal scenario
+
+- Create k8s Ingress object and route to Nginx service from outside
+
 - Use Nginx Ingress Controller to route to appropriate services
+
 - Network Policy to restrict traffic from/to desrired applications only
-- *CPU* based *Horizontal Pod AutoScaler* for Front/Back end applications
+
 - Resource Quota to manage resourcer allocation avcross namespaces
-- Taintts and Tolerations
-- Node Affinity/Anti-Affinity
 
+- *Rolling Updates* and *Rollbacks*
 
+  
 
 ## Hands-On Lab
 
@@ -187,8 +187,6 @@
     Follow On-Screen Instructions
     ```
 
-  
-
   #### Application Deployment - Simple
 
   - Deploy sample microservice
@@ -203,7 +201,340 @@
     kubectl expose deploy nginx-deploy --name=nginx-svc --port=80 --type=NodePort
     ```
 
+     
+
+  ####  Application Deployment - Advanced
+
+  - Create Namespaces for resource level seggregration
+
+    ```bash
+    kubectl create ns k8s-dev
+    kubectl create ns k8s-qa
+    ```
+
+  - Deploy first microservice using YAML - *nginx-deploy-1.yaml*
+
+    ```yaml
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      labels:
+        app: nginx-deploy-1
+      name: nginx-deploy-1
+      namespace: k8s-dev
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: nginx-deploy-1
+      strategy:
+       type: RollingUpdate
+       rollingUpdate:
+        maxSurge: 20%
+        maxUnavailable: 1
+      template:
+        metadata:      
+          labels:
+            app: nginx-deploy-1
+        spec:
+          containers:
+          - image: nginx:latest
+            name: nginx
+            ports:
+            - containerPort: 80
+            resources:
+              requests:
+                cpu: 100m
+                memory: 100Mi
+              limits:
+                cpu: 200m
+                memory: 200Mi
     
+    ```
+
+  - Deploy Service object for first microservice using YAML - *nginx-svc-1.yaml*
+
+    ```yaml
+    apiVersion: v1
+    kind: Service
+    metadata:
+      labels:
+        app: nginx-deploy-1
+      name: nginx-svc-1
+      namespace: k8s-dev
+    spec:
+      ports:
+      - port: 80
+        protocol: TCP
+        targetPort: 80
+      selector:
+        app: nginx-deploy-1
+      type: ClusterIP
+    ```
+
+  - Deploy second microservice using YAML - *nginx-deploy-2.yaml*
+
+    ```yaml
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      labels:
+        app: nginx-deploy-2
+      name: nginx-deploy-2
+      namespace: k8s-dev
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: nginx-deploy-2
+      strategy: {}
+      template:
+        metadata:      
+          labels:
+            app: nginx-deploy-2
+        spec:
+          containers:
+          - image: nginx:latest
+            name: nginx
+            ports:
+            - containerPort: 80
+            resources:
+              requests:
+                cpu: 150m
+                memory: 150Mi
+              limits:
+                cpu: 300m
+                memory: 300Mi
+    ```
+
+  - Deploy Service object for first microservice using YAML - *nginx-svc-2.yaml*
+
+    ```yaml
+    apiVersion: v1
+    kind: Service
+    metadata:
+      labels:
+        app: nginx-deploy-2
+      name: nginx-svc-2
+      namespace: k8s-dev
+    spec:
+      ports:
+      - port: 80
+        protocol: TCP
+        targetPort: 80
+      selector:
+        app: nginx-deploy-2
+      type: ClusterIP
+    ```
+
+  
+
+  - Install *Helm*
+
+    ```bash
+    brew install helm - MacOS
+    choco install kubernetes-helm - Windows
+    sudo snap install helm --classic - Ubuntu
+    
+    https://helm.sh/docs/intro/install/#helm - Refer this for more options
+    
+    
+    ```
+
+  - Install *Nginx* *Ingress* *Controller* 
+
+    ```bash
+    # Create a namespace for your ingress resources
+    kubectl create namespace ingress-basic
+    
+    # Add the ingress-nginx repository
+    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+    
+    # Use Helm to deploy an NGINX ingress controller
+    helm install nginx-ingress ingress-nginx/ingress-nginx \
+        --namespace ingress-basic \
+        --set controller.replicaCount=2 \
+        --set controller.nodeSelector."beta\.kubernetes\.io/os"=linux \
+        --set defaultBackend.nodeSelector."beta\.kubernetes\.io/os"=linux
+    ```
+
+  - Install *MetalB* as *Load Balancer*
+
+    ```bash
+    # Reference: https://metallb.universe.tf/installation/
+    
+    kubectl edit configmap -n kube-system kube-proxy
+    
+    Set the following as -
+    apiVersion: kubeproxy.config.k8s.io/v1alpha1
+    kind: KubeProxyConfiguration
+    mode: "ipvs"
+    ipvs:
+      strictARP: true
+      
+    kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.3/manifests/namespace.yaml
+    
+    kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.3/manifests/metallb.yaml
+    
+    # On first install only
+    kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
+    ```
+
+  - Prepare *MetalB* to select IP pool for load balancing and then privide the same for *Nginx Ingress Controller*
+
+    ```yaml
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      namespace: metallb-system
+      name: config
+    data:
+      config: |
+        address-pools:
+        - name: metalb-pools
+          protocol: layer2
+          addresses:
+          - 192.168.56.100-192.168.56.120
+    ```
+
+  - Create Ingress object for Routing
+
+    ```YAML
+    apiVersion: networking.k8s.io/v1beta1
+    kind: Ingress
+    metadata:
+      name: k8s-ingress 
+      namespace: k8s-dev 
+      annotations:    
+        kubernetes.io/ingress.class: nginx    
+        nginx.ingress.kubernetes.io/rewrite-target: /$1
+        nginx.ingress.kubernetes.io/ssl-redirect: "false"
+        nginx.ingress.kubernetes.io/enable-cors: "true"    
+    spec:  
+      rules:    
+      - http:
+          paths:
+          - path: /n1/?(.*)
+            backend:
+              serviceName: nginx-svc-1
+              servicePort: 80
+          - path: /n2/?(.*)
+            backend:
+              serviceName: nginx-svc-2
+              servicePort: 80
+    ```
+
+  - Route to both microservices
+
+    ```bash
+    kubectl get ing -n k8s-dev
+    
+    NAME          CLASS    HOSTS   ADDRESS          PORTS   AGE
+    k8s-ingress   <none>   *       192.168.56.100   80      5h17m
+    
+    curl http://192.168.56.100/n1
+    curl http://192.168.56.100/n2
+    ```
+
+  - Expected Response
+
+  ```html
+  <!DOCTYPE html>
+  <html>
+  <head>
+  <title>Welcome to nginx!</title>
+  <style>
+      body {
+          width: 35em;
+          margin: 0 auto;
+          font-family: Tahoma, Verdana, Arial, sans-serif;
+      }
+  </style>
+  </head>
+  <body>
+  <h1>Welcome to nginx!</h1>
+  <p>If you see this page, the nginx web server is successfully installed and
+  working. Further configuration is required.</p>
+  
+  <p>For online documentation and support please refer to
+  <a href="http://nginx.org/">nginx.org</a>.<br/>
+  Commercial support is available at
+  <a href="http://nginx.com/">nginx.com</a>.</p>
+  
+  <p><em>Thank you for using nginx.</em></p>
+  </body>
+  </html>
+  ```
+
+-  *Network Policy* - Restrict traffic from intended workload only with the Cluster - *k8s-nwp.yaml*
+
+  ```bash
+  apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: k8s-network-policy
+    namespace: k8s-dev
+  spec:
+    podSelector:
+      matchLabels:
+        app: nginx-deploy-2
+    policyTypes:
+    - Ingress
+    ingress:
+    - from:    
+      - namespaceSelector:
+          matchLabels:
+            name: k8s-dev
+      - podSelector:
+          matchLabels:
+            app: nginx-deploy-1
+      ports:
+      - protocol: TCP
+        port: 80
+  ```
+
+  Try Previous URLs now and see the differnce
+
+  ```bash
+  curl http://192.168.56.100/n1 - Should still return correct response
+  curl http://192.168.56.100/n2 - Should actually timeout as blocked by Network Policy
+  ```
+
+- Resouerce Quota - For restricting resource usage
+
+  - Restricting No. of Objects created within Cluster - *k8s-dev-rq-oc.yaml*
+
+    ```yaml
+    apiVersion: v1
+    kind: ResourceQuota
+    metadata:
+      name: object-counts
+      namespace: k8s-dev
+    spec:
+      hard:    
+        pods: "4" 
+        services: "2"
+    ```
+
+  - Restricting amount of Compute resources created within Cluster - *k8s-dev-rq-cr.yaml*
+
+    ```yaml
+    apiVersion: v1
+    kind: ResourceQuota
+    metadata:
+      name: compute-resources
+      namespace: k8s-dev
+    spec:
+      hard:    
+        requests.cpu: 300m
+        requests.memory: 250Mi
+        limits.cpu: 500m
+        limits.memory: 500Mi
+    ```
+
+    
+
+  
 
 
 
