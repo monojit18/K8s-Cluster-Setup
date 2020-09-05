@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: k8s-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: ""
+  hostPath:
+    path: /Users/monojitdattams/k8s-storage/

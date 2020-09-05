@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: k8s-ingress 
+  namespace: k8s-dev 
+  annotations:    
+    kubernetes.io/ingress.class: nginx    
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/enable-cors: "true"    
+spec:  
+  rules:    
+  - http:
+      paths:
+      - path: /n1/?(.*)
+        backend:
+          serviceName: nginx-svc-1
+          servicePort: 80
+      - path: /n2/?(.*)
+        backend:
+          serviceName: nginx-svc-2
+          servicePort: 80
