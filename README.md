@@ -25,13 +25,13 @@
 
    (*Identify the issue in connecting to the Nginx application from out side the cluster*)
 
-3. Scale (out/in) Applications - *Manually*
-
 ## Application Deployment - Advanced
 
 - Create *Namespaces* for *DEV* and *QA* environments
 
 - Deploy Microservivces using YAML file rather than command line
+
+- Scale (out/in) Applications - *Manually*
 
 - Install Helm package manager
 
