@@ -1,4 +1,4 @@
-# Setup of a vanilla Kubernetes (k8s) cluster - on bare metal
+# Setup vanilla Kubernetes (k8s) cluster - on bare metal - Workstations
 
 ## Pre-Requisites
 

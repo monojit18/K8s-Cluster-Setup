@@ -15,8 +15,8 @@ spec:
       - path: /n1/?(.*)
         backend:
           serviceName: nginx-svc-1
-          servicePort: 80
-      - path: /n2/?(.*)
+          servicePort: 80      
+      - path: /?(.*)
         backend:
-          serviceName: nginx-svc-2
+          serviceName: ratingsweb-service
           servicePort: 80
