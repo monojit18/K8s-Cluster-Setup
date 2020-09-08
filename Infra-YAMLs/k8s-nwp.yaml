@@ -6,7 +6,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: nginx-deploy-2
+      app: ratingsapi-pod
   policyTypes:
   - Ingress
   ingress:
@@ -16,7 +16,4 @@ spec:
           name: k8s-dev
     - podSelector:
         matchLabels:
-          app: nginx-deploy-1
-    ports:
-    - protocol: TCP
-      port: 80
+          app: ratingsweb-pod    
