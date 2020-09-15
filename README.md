@@ -3,8 +3,16 @@
 ## Pre-Requisites
 
 1. Download Virtual Box - *https://www.virtualbox.org/wiki/Downloads*
-2. Install Vagrant - *brew cask install vagrant*. This would help provisioning the VM infrastructure
+2. Install Vagrant - this would help provisioning the VM infrastructure
+
+   - On MacOS - *brew cask install vagrant* 
+   - On Windows - https://www.vagrantup.com/docs/installation
+   - On Linux (*Ubuntu*) - *sudo apt install vagrant*
 3. Git CLI client - *https://git-scm.com/downloads* - for easy reference to sample repos
+4. Install Docker - this would help building container images locally and then pushing onto desired *Container Registries*
+   - On MacOS - https://docs.docker.com/docker-for-mac/install/
+   - On Windows - https://docs.docker.com/docker-for-windows/install/
+   - On Linux (*Ubuntu*) - https://docs.docker.com/engine/install/ubuntu/ 
 
 ## Cluster Setup
 
@@ -29,17 +37,23 @@
 
 - Create *Namespaces* for *DEV* and *QA* environments
 
-- Deploy Microservivces using YAML file rather than command line
+- Create Azure Container Registry in Azure Portal
 
-- Scale (out/in) Applications - *Manually*
+- Clone Repos - 2 Sample microservices interacting with each other
+
+- Build each Microservice with docker and Push the docker images to ACR (*Azure Container Registry*)
 
 - Install Helm package manager
+
+- Deploy Microservivces using YAML file rather than command line
 
 - Install *Nginx* *Ingress* *Controller* along with *MetalLB*, providing Load Balancer solution for bare metsal scenario
 
 - Create k8s Ingress object and route to Nginx service from outside
 
 - Use Nginx Ingress Controller to route to appropriate services
+
+- Scale (out/in) Applications - *Manually*
 
 - Network Policy to restrict traffic from/to desrired applications only
 
@@ -212,118 +226,146 @@
     kubectl create ns k8s-qa
     ```
 
-  - Deploy first microservice using YAML - *nginx-deploy-1.yaml*
+  - Create Azure Container Registry in Azure Portal - https://docs.microsoft.com/en-us/azure/container-registry/container-registry-get-started-portal
+
+    - Note down the Credentials - *Login Server*, *UserName* and *Password* under *Access Keys* section
+    - On your CLI - *docker login <Login-Server> -u <UserName> -p <Password>*
+
+  - Clone Repos - *RatingsWeb* and *RatingsApi*
+
+    - *RatingsWeb* - https://github.com/monojit18/RatingsWeb-k8s.git
+    - *RatingsApi* - https://github.com/monojit18/RatingsApi-k8s.git 
+
+  - Build
+
+  - Deploy first microservice using YAML - *ratingsweb-deployment.yaml*
 
     ```yaml
     apiVersion: apps/v1
     kind: Deployment
     metadata:
-      labels:
-        app: nginx-deploy-1
-      name: nginx-deploy-1
+      name: ratingsweb-deploy
       namespace: k8s-dev
     spec:
-      replicas: 1
       selector:
-        matchLabels:
-          app: nginx-deploy-1
-      strategy:
-       type: RollingUpdate
-       rollingUpdate:
-        maxSurge: 20%
-        maxUnavailable: 1
+          matchLabels:
+            app: ratingsweb-pod
+      replicas: 1
       template:
-        metadata:      
-          labels:
-            app: nginx-deploy-1
-        spec:
-          containers:
-          - image: nginx:latest
-            name: nginx
-            ports:
-            - containerPort: 80
-            resources:
-              requests:
-                cpu: 100m
-                memory: 100Mi
-              limits:
-                cpu: 200m
-                memory: 200Mi
-    
+          metadata:
+            labels:
+                app: ratingsweb-pod
+          spec:
+            containers:
+            - name: ratingsweb-app
+              image: k8swkshpacr.azurecr.io/ratingsweb-k8s:v1.0.2
+              imagePullPolicy: IfNotPresent
+              readinessProbe:
+                httpGet:
+                  port: 8080
+                  path: /
+              livenessProbe:
+                httpGet:
+                  port: 8080
+                  path: /
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+              env:
+              - name: API
+                value: http://ratingsapi-service.k8s-dev.svc.cluster.local
+              ports:
+              - containerPort: 8080
+            imagePullSecrets:
+            - name: k8s-workshop-secret
     ```
 
-  - Deploy Service object for first microservice using YAML - *nginx-svc-1.yaml*
+  - Deploy Service object for first microservice using YAML - *ratingsweb-service.yaml*
 
     ```yaml
     apiVersion: v1
     kind: Service
     metadata:
-      labels:
-        app: nginx-deploy-1
-      name: nginx-svc-1
+      name: ratingsweb-service
       namespace: k8s-dev
     spec:
-      ports:
-      - port: 80
-        protocol: TCP
-        targetPort: 80
       selector:
-        app: nginx-deploy-1
+        app: ratingsweb-pod
+      ports:
+      - protocol: TCP
+        port: 80
+        targetPort: 8080
       type: ClusterIP
     ```
-
-  - Deploy second microservice using YAML - *nginx-deploy-2.yaml*
+    
+  - Deploy second microservice using YAML - *ratingsapi-deployment.yaml*
 
     ```yaml
     apiVersion: apps/v1
     kind: Deployment
     metadata:
-      labels:
-        app: nginx-deploy-2
-      name: nginx-deploy-2
+      name: ratingsapi-deploy
       namespace: k8s-dev
     spec:
-      replicas: 1
       selector:
-        matchLabels:
-          app: nginx-deploy-2
-      strategy: {}
+          matchLabels:
+            app: ratingsapi-pod
+      replicas: 1
       template:
-        metadata:      
-          labels:
-            app: nginx-deploy-2
-        spec:
-          containers:
-          - image: nginx:latest
-            name: nginx
-            ports:
-            - containerPort: 80
-            resources:
-              requests:
-                cpu: 150m
-                memory: 150Mi
-              limits:
-                cpu: 300m
-                memory: 300Mi
+          metadata:
+            labels:
+                app: ratingsapi-pod
+          spec:
+            containers:
+            - name: ratingsapi-app
+              image: k8swkshpacr.azurecr.io/ratingsapi-k8s:v1.0.2
+              imagePullPolicy: IfNotPresent
+              readinessProbe:
+                httpGet:
+                  port: 3000
+                  path: /healthz
+              livenessProbe:
+                httpGet:
+                  port: 3000
+                  path: /healthz
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "500m"
+              env:          
+              - name: MONGODB_URI
+                valueFrom:
+                    secretKeyRef:
+                      key: MONGOCONNECTION
+                      name: k8s-workshop-mongo-secret
+              ports:
+              - containerPort: 3000
+            imagePullSecrets:
+            - name: k8s-workshop-secret
     ```
 
-  - Deploy Service object for first microservice using YAML - *nginx-svc-2.yaml*
+  - Deploy Service object for first microservice using YAML - *ratingsapi-service.yaml*
 
     ```yaml
     apiVersion: v1
     kind: Service
     metadata:
-      labels:
-        app: nginx-deploy-2
-      name: nginx-svc-2
+      name: ratingsapi-service
       namespace: k8s-dev
     spec:
-      ports:
-      - port: 80
-        protocol: TCP
-        targetPort: 80
       selector:
-        app: nginx-deploy-2
+        app: ratingsapi-pod
+      ports:
+      - protocol: TCP
+        port: 80
+        targetPort: 3000    
       type: ClusterIP
     ```
 

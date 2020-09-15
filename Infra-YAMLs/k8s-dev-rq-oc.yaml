@@ -5,5 +5,5 @@ metadata:
   namespace: k8s-dev
 spec:
   hard:    
-    pods: "4" 
-    services: "2"
+    pods: "50"
+    services: "6"
